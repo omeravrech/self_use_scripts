@@ -9,5 +9,6 @@ Function PrintReporters {
             PrintReporters -user $reporter -dept ($dept-1);
         }
     }
-    
-    PrintReporters -user '[user]' -dept '[number]'
+}
+
+PrintReporters -user '[user]' -dept '[number]'
