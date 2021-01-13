@@ -126,7 +126,6 @@ Function Get-ServerList {
             $WEB = Read-Host -Prompt "Please enter website for checking (Press enter to stop)"
             IF ($WEB -match $FQDNPattern) {
                 $ServerList.Add($Matches[0]) | Out-Null
-                Write-Host "Add $Matches[0]"
             }
         } WHILE($WEB);
     }
