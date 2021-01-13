@@ -1,5 +1,9 @@
-﻿# Get-CimInstance -Namespace "root\rsop\computer" -ClassName "RSOP_GPO"
-# Get-CimClass -Namespace root/CIMV2 | Where-Object CimClassName -like Win32* | Select-Object CimClassName | Where -Value -Likes "*Defender*"
+# Developed by Omer Avrech #
+
+# Const variables
+$IPPATERN =    [Regex]::new('^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$')
+$MASKPATERN =  [Regex]::new('^(((255\.){3}(255|254|252|248|240|224|192|128|0+))|((255\.){2}(255|254|252|248|240|224|192|128|0+)\.0)|((255\.)(255|254|252|248|240|224|192|128|0+)(\.0+){2})|((255|254|252|248|240|224|192|128|0+)(\.0+){3}))$')
+$FQDNPattern = [Regex]::new("[\w.-]+(?:\.[\w\.-]+)+")
 
 Function Collect_Host_Data {
     BEGIN {
@@ -18,10 +22,6 @@ Function Collect_Host_Data {
 }
 Function Get-Network-Info {
     BEGIN {
-        # Const variables
-        $IPPATERN = [Regex]::new('^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$')
-        $MASKPATERN = [Regex]::new('^(((255\.){3}(255|254|252|248|240|224|192|128|0+))|((255\.){2}(255|254|252|248|240|224|192|128|0+)\.0)|((255\.)(255|254|252|248|240|224|192|128|0+)(\.0+){2})|((255|254|252|248|240|224|192|128|0+)(\.0+){3}))$')
-
         # Collect data about the active network cards
         $Result = [System.Collections.ArrayList]::new()
         $interfaces = Get-NetAdapter | Where-Object -Property "Status" -EQ "Up"
@@ -120,7 +120,6 @@ Function DNS_Connectivity {
 Function Get-ServerList {
     BEGIN {
         $ServerList = [System.Collections.ArrayList]::new()
-        $FQDNPattern = [Regex]::new("[\w.-]+(?:\.[\w\.-]+)+")
     }
     PROCESS {
         DO {
@@ -139,7 +138,8 @@ Function Get-ServerList {
 Function Main {
     cls
     $WebSites = Get-ServerList
-
+    cls
+    
     $HostData = Collect_Host_Data
     $Interfaces_Status = Get-Network-Info
     $ServerList = (($Interfaces_Status | Select-Object -ExpandProperty LookupServers) -Join " ").Split(" ") + "8.8.8.8"
