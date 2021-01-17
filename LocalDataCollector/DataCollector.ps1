@@ -52,20 +52,32 @@ Function Get-Network-Info {
         return ($Result)
     }
 }
-
-Function ConnectivityCheck {
-    PARAM (
-        [Parameter(Mandatory=$true, Position=0)]
-        [string] $Server
+Function DNS_Connectivity {
+    param(
+            [Parameter(Mandatory=$true, Position=0)]
+            $Servers
     )
-    IF (Test-Connection $Server -ErrorAction SilentlyContinue) {
-        RETURN "Pass"
-    } ELSE {
-        RETURN "Failed"
+    BEGIN {
+        [int]$Progress = 0
+        $Result = [System.Collections.ArrayList]::new()
+    }
+    PROCESS {
+        FOREACH ($Server in $Servers) {
+            $TestResult = Test-NetConnection -Port 53 -ComputerName $Server -WarningAction SilentlyContinue
+            $Result.Add([PSCustomObject][ordered]@{
+                "IP Address" = $Server;
+                "Hostname" = try { [System.Net.Dns]::GetHostEntry($Server).Hostname } catch { "" };
+                "Online" = ($TestResult.PingSucceeded -or $TestResult.TcpTestSucceeded)
+                "DNS Service" = $TestResult.TcpTestSucceeded
+            }) | Out-Null
+            $Progress += (1/$Servers.Count) * 100
+        }
+    }
+    END {
+        return $Result
     }
 }
-
-Function DNS_Connectivity {
+Function DNS_Translation {
     param(
         [Parameter(Mandatory=$true, Position=0)]
         $Servers,
@@ -78,37 +90,28 @@ Function DNS_Connectivity {
         $FQDNList = $FQDNList | Select-Object -Unique
         #List of test domains
         $Result = [System.Collections.ArrayList]::new()
-
         [int]$Progress = 0
     }
     PROCESS {
         FOREACH ($Server in $Servers) {
-            IF (Test-Connection $Server -ErrorAction SilentlyContinue) {
-                FOREACH ($Test in $FQDNList) {  
-                    Write-Progress -Activity "Checking DNS Functinality [$Server -> $Test]" -PercentComplete $Progress
-                    IF($DNSResult = (Resolve-DnsName -DnsOnly -Type A -Server $Server $Test -ErrorAction SilentlyContinue)) {
-                        $result.Add([PSCustomObject][ordered]@{
-                            "Server" = $Server
-                            "Status" = "Pass"
-                            "Destination" = $DNSResult[0].Name
-                            "Resolve" = $DNSResult.IPAddress
-                            "Connectivity" = (ConnectivityCheck $DNSResult.IPAddress)
-                        }) | Out-Null
-                    } ELSE {
-                        $result.Add([PSCustomObject][ordered]@{
-                            "Server" = $Server
-                            "Status" = "Fail"
-                            "Destination" = $Test
-                        }) | Out-Null
-                    }
-                    $Progress += (1/($Servers.Count * $FQDNList.Count)) * 100
+            FOREACH ($Test in $FQDNList) {  
+                Write-Progress -Activity "Checking DNS Functinality [$Server -> $Test]" -PercentComplete $Progress
+                IF($DNSResult = (Resolve-DnsName -DnsOnly -Type A -Server $Server $Test -ErrorAction SilentlyContinue)) {
+                    $result.Add([PSCustomObject][ordered]@{
+                        "Server" = $Server
+                        "Status" = "Pass"
+                        "Destination" = $DNSResult[0].Name
+                        "Resolve" = $DNSResult.IPAddress
+                        "Availability" = IF (Test-Connection $DNSResult.IPAddress -ErrorAction SilentlyContinue) { "Accessable" } ELSE { "Unaccessable" }
+                    }) | Out-Null
+                } ELSE {
+                    $result.Add([PSCustomObject][ordered]@{
+                        "Server" = $Server
+                        "Status" = "Fail"
+                        "Destination" = $Test
+                    }) | Out-Null
                 }
-            } ELSE {
-                $Result.Add([PSCustomObject][ordered]@{
-                    "Server" = $Server
-                    "Status" = "Inactive"
-                }) | Out-Null
-                $Progress += (1/$Servers.Count) * 100
+                $Progress += (1/($Servers.Count * $FQDNList.Count)) * 100
             }
         }
     }
@@ -116,17 +119,21 @@ Function DNS_Connectivity {
         return $Result
     }
 }
-
 Function Get-ServerList {
     BEGIN {
         $ServerList = [System.Collections.ArrayList]::new()
+        Write-Host "Please enter the websites you want to tests."
+        Write-Host "In order to exit, please press Enter."
+        Write-Host ""
     }
     PROCESS {
+        $counter = 1
         DO {
-            $WEB = Read-Host -Prompt "Please enter website for checking (Press enter to stop)"
+            $WEB = Read-Host -Prompt "FQDN $counter"
             IF ($WEB -match $FQDNPattern) {
                 $ServerList.Add($Matches[0]) | Out-Null
             }
+            $counter += 1
         } WHILE($WEB);
     }
     END {
@@ -142,7 +149,9 @@ Function Main {
     $HostData = Collect_Host_Data
     $Interfaces_Status = Get-Network-Info
     $ServerList = (($Interfaces_Status | Select-Object -ExpandProperty LookupServers) -Join " ").Split(" ") + "8.8.8.8"
-    $DNS_Status = DNS_Connectivity -Servers $ServerList -FQDNList $WebSites
+    $DNS_Status = DNS_Connectivity -Servers $ServerList
+    $ServerList = $DNS_Status | Where-Object -Property "DNS Service" -EQ $true | Select-Object -ExpandProperty "IP Address" -Unique
+    $DNS_Trans = DNS_Translation -Servers $ServerList -FQDNList $WebSites
 
     Write-Host "*------------------------*"
     Write-Host "|      Host Details      |"
@@ -153,9 +162,11 @@ Function Main {
     Write-Host "*------------------------*"
     $Interfaces_Status
     Write-Host "*------------------------*"
-    Write-Host "|    DNS Translation     |"
+    Write-Host "|      DNS Servers       |"
     Write-Host "*------------------------*"
     $DNS_Status | Format-Table
+    Write-Host ""
+    $DNS_Trans | Format-Table
 }
 
 Main
