@@ -151,10 +151,10 @@ Function Main {
     Write-Host "*------------------------*"
     Write-Host "|  Network Interface(s)  |"
     Write-Host "*------------------------*"
-    $Interfaces_Status | Format-Table
+    $Interfaces_Status
     Write-Host "*------------------------*"
     Write-Host "|    DNS Translation     |"
-    Write-Host "*-------------------- ---*"
+    Write-Host "*------------------------*"
     $DNS_Status | Format-Table
 }
 
